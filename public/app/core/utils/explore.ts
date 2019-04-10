@@ -125,6 +125,7 @@ export function buildQueryTransaction(
   // However, some datasources don't use `panelId + query.refId`, but only `panelId`.
   // Therefore panel id has to be unique.
   const panelId = `${queryOptions.format}-${query.key}`;
+  const id = generateKey();
 
   const options = {
     interval,
@@ -142,6 +143,7 @@ export function buildQueryTransaction(
       __interval_ms: { text: intervalMs, value: intervalMs },
     },
     maxDataPoints: queryOptions.maxDataPoints,
+    requestId: id,
   };
 
   return {
@@ -150,7 +152,7 @@ export function buildQueryTransaction(
     resultType,
     rowIndex,
     scanning,
-    id: generateKey(), // reusing for unique ID
+    id, // reusing for unique ID
     done: false,
     latency: 0,
   };
