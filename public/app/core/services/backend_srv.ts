@@ -177,6 +177,7 @@ export class BackendSrv implements Props {
       });
 
       const unsubscribe = () => {
+        console.log('unsub -> datasourceStream');
         if (requestId) {
           this.resolveCancelerIfExists(requestId);
         }
