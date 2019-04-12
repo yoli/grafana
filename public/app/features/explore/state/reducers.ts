@@ -20,6 +20,8 @@ import {
   SplitCloseActionPayload,
   loadExploreDatasources,
   runQueriesAction,
+  startLiveStreamAction,
+  stopLiveStreamAction,
 } from './actionTypes';
 import { reducerFactory } from 'app/core/redux';
 import {
@@ -53,6 +55,7 @@ import {
 } from './actionTypes';
 import { updateLocation } from 'app/core/actions/location';
 import { LocationUpdate } from 'app/types';
+import { LogsModel } from 'app/core/logs_model';
 
 export const DEFAULT_RANGE = {
   from: 'now-6h',
@@ -98,6 +101,7 @@ export const makeExploreItemState = (): ExploreItemState => ({
   queryKeys: [],
   urlState: null,
   update: makeInitialUpdateState(),
+  streaming: false,
 });
 
 /**
@@ -364,17 +368,40 @@ export const itemReducer = reducerFactory<ExploreItemState>({} as ExploreItemSta
   .addMapper({
     filter: queryTransactionSuccessAction,
     mapper: (state, action): ExploreItemState => {
-      const { datasourceInstance, queryIntervals } = state;
+      const { datasourceInstance, queryIntervals, streaming } = state;
       const { history, queryTransactions } = action.payload;
-      const results = calculateResultsFromQueryTransactions(
+      const { graphResult, tableResult, logsResult } = calculateResultsFromQueryTransactions(
         queryTransactions,
         datasourceInstance,
         queryIntervals.intervalMs
       );
 
+      if (streaming) {
+        // just so that we can see the log rows change, needs lots more logic
+        const rows = logsResult.rows.concat(state.logsResult.rows);
+        const accumulatedLogsResult: LogsModel = state.logsResult
+          ? {
+              ...state.logsResult,
+              rows: rows.slice(0, 1000),
+            }
+          : logsResult;
+        return {
+          ...state,
+          graphResult,
+          tableResult,
+          logsResult: accumulatedLogsResult,
+          history,
+          queryTransactions,
+          showingStartPage: false,
+          update: makeInitialUpdateState(),
+        };
+      }
+
       return {
         ...state,
-        ...results,
+        graphResult,
+        tableResult,
+        logsResult,
         history,
         queryTransactions,
         showingStartPage: false,
@@ -574,6 +601,24 @@ export const itemReducer = reducerFactory<ExploreItemState>({} as ExploreItemSta
       return {
         ...state,
         queryIntervals,
+      };
+    },
+  })
+  .addMapper({
+    filter: startLiveStreamAction,
+    mapper: (state): ExploreItemState => {
+      return {
+        ...state,
+        streaming: true,
+      };
+    },
+  })
+  .addMapper({
+    filter: stopLiveStreamAction,
+    mapper: (state): ExploreItemState => {
+      return {
+        ...state,
+        streaming: false,
       };
     },
   })

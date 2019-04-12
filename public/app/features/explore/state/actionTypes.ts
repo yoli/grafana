@@ -222,6 +222,14 @@ export interface RunQueriesPayload {
   exploreId: ExploreId;
 }
 
+export interface StartLiveStreamPayload {
+  exploreId: ExploreId;
+}
+
+export interface StopLiveStreamPayload {
+  exploreId: ExploreId;
+}
+
 /**
  * Adds a query row after the row with the given index.
  */
@@ -425,6 +433,9 @@ export const testDataSourceFailureAction = actionCreatorFactory<TestDatasourceFa
 export const loadExploreDatasources = actionCreatorFactory<LoadExploreDataSourcesPayload>(
   'explore/LOAD_EXPLORE_DATASOURCES'
 ).create();
+
+export const startLiveStreamAction = actionCreatorFactory<StartLiveStreamPayload>('explore/StartLiveStream').create();
+export const stopLiveStreamAction = actionCreatorFactory<StopLiveStreamPayload>('explore/StopLiveStream').create();
 
 export type HigherOrderAction =
   | ActionOf<SplitCloseActionPayload>

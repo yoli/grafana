@@ -258,6 +258,8 @@ export interface ExploreItemState {
   urlState: ExploreUrlState;
 
   update: ExploreUpdateState;
+
+  streaming: boolean;
 }
 
 export interface ExploreUpdateState {
@@ -337,6 +339,7 @@ export interface QueryTransaction {
   resultType: ResultType;
   rowIndex: number;
   scanning?: boolean;
+  streaming?: boolean;
 }
 
 export type RangeScanner = () => RawTimeRange;

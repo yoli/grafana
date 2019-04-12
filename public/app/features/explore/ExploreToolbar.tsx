@@ -1,9 +1,9 @@
-import React, { PureComponent } from 'react';
+import React, { PureComponent, ChangeEvent } from 'react';
 import { connect } from 'react-redux';
 import { hot } from 'react-hot-loader';
 
 import { ExploreId } from 'app/types/explore';
-import { DataSourceSelectItem, RawTimeRange, TimeRange, ClickOutsideWrapper } from '@grafana/ui';
+import { DataSourceSelectItem, RawTimeRange, TimeRange, ClickOutsideWrapper, Switch } from '@grafana/ui';
 import { DataSourcePicker } from 'app/core/components/Select/DataSourcePicker';
 import { StoreState } from 'app/types/store';
 import {
@@ -13,6 +13,7 @@ import {
   runQueries,
   splitOpen,
   changeRefreshInterval,
+  toggleLiveStream,
 } from './state/actions';
 import TimePicker from './TimePicker';
 import { RefreshPicker, SetInterval } from '@grafana/ui';
@@ -59,6 +60,8 @@ interface StateProps {
   selectedDatasource: DataSourceSelectItem;
   splitted: boolean;
   refreshInterval: string;
+  streaming: boolean;
+  supportsStreaming: boolean;
 }
 
 interface DispatchProps {
@@ -68,6 +71,7 @@ interface DispatchProps {
   closeSplit: typeof splitClose;
   split: typeof splitOpen;
   changeRefreshInterval: typeof changeRefreshInterval;
+  toggleLiveStream: typeof toggleLiveStream;
 }
 
 type Props = StateProps & DispatchProps & OwnProps;
@@ -98,6 +102,11 @@ export class UnConnectedExploreToolbar extends PureComponent<Props, {}> {
     changeRefreshInterval(exploreId, item);
   };
 
+  onLiveStreamChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const { exploreId } = this.props;
+    this.props.toggleLiveStream(exploreId, event.target.checked);
+  };
+
   render() {
     const {
       datasourceMissing,
@@ -112,6 +121,8 @@ export class UnConnectedExploreToolbar extends PureComponent<Props, {}> {
       refreshInterval,
       onChangeTime,
       split,
+      streaming,
+      supportsStreaming,
     } = this.props;
 
     return (
@@ -157,35 +168,44 @@ export class UnConnectedExploreToolbar extends PureComponent<Props, {}> {
                 })}
               </div>
             ) : null}
-            <div className="explore-toolbar-content-item timepicker">
-              <ClickOutsideWrapper onClick={this.onCloseTimePicker}>
-                <TimePicker ref={timepickerRef} range={range} onChangeTime={onChangeTime} />
-              </ClickOutsideWrapper>
+            {supportsStreaming && (
+              <div className="explore-toolbar-content-item">
+                <Switch checked={streaming} onChange={this.onLiveStreamChange} label="Live" />
+              </div>
+            )}
+            {!streaming && (
+              <>
+                <div className="explore-toolbar-content-item timepicker">
+                  <ClickOutsideWrapper onClick={this.onCloseTimePicker}>
+                    <TimePicker ref={timepickerRef} range={range} onChangeTime={onChangeTime} />
+                  </ClickOutsideWrapper>
 
-              <RefreshPicker
-                onIntervalChanged={this.onChangeRefreshInterval}
-                onRefresh={this.onRunQuery}
-                value={refreshInterval}
-                tooltip="Refresh"
-              />
-              {refreshInterval && <SetInterval func={this.onRunQuery} interval={refreshInterval} />}
-            </div>
+                  <RefreshPicker
+                    onIntervalChanged={this.onChangeRefreshInterval}
+                    onRefresh={this.onRunQuery}
+                    value={refreshInterval}
+                    tooltip="Refresh"
+                  />
+                  {refreshInterval && <SetInterval func={this.onRunQuery} interval={refreshInterval} />}
+                </div>
 
-            <div className="explore-toolbar-content-item">
-              <button className="btn navbar-button navbar-button--no-icon" onClick={this.onClearAll}>
-                Clear All
-              </button>
-            </div>
-            <div className="explore-toolbar-content-item">
-              {createResponsiveButton({
-                splitted,
-                title: 'Run Query',
-                onClick: this.onRunQuery,
-                buttonClassName: 'navbar-button--secondary',
-                iconClassName: loading ? 'fa fa-spinner fa-fw fa-spin run-icon' : 'fa fa-level-down fa-fw run-icon',
-                iconSide: IconSide.right,
-              })}
-            </div>
+                <div className="explore-toolbar-content-item">
+                  <button className="btn navbar-button navbar-button--no-icon" onClick={this.onClearAll}>
+                    Clear All
+                  </button>
+                </div>
+                <div className="explore-toolbar-content-item">
+                  {createResponsiveButton({
+                    splitted,
+                    title: 'Run Query',
+                    onClick: this.onRunQuery,
+                    buttonClassName: 'navbar-button--secondary',
+                    iconClassName: loading ? 'fa fa-spinner fa-fw fa-spin run-icon' : 'fa fa-level-down fa-fw run-icon',
+                    iconSide: IconSide.right,
+                  })}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -203,6 +223,7 @@ const mapStateToProps = (state: StoreState, { exploreId }: OwnProps): StateProps
     queryTransactions,
     range,
     refreshInterval,
+    streaming,
   } = exploreItem;
   const selectedDatasource = datasourceInstance
     ? exploreDatasources.find(datasource => datasource.name === datasourceInstance.name)
@@ -217,6 +238,8 @@ const mapStateToProps = (state: StoreState, { exploreId }: OwnProps): StateProps
     selectedDatasource,
     splitted,
     refreshInterval,
+    streaming,
+    supportsStreaming: datasourceInstance ? datasourceInstance.supportsStreaming : false,
   };
 };
 
@@ -227,6 +250,7 @@ const mapDispatchToProps: DispatchProps = {
   runQueries,
   closeSplit: splitClose,
   split: splitOpen,
+  toggleLiveStream: toggleLiveStream,
 };
 
 export const ExploreToolbar = hot(module)(

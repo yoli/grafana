@@ -80,6 +80,8 @@ import {
   testDataSourceSuccessAction,
   testDataSourceFailureAction,
   loadExploreDatasources,
+  startLiveStreamAction,
+  stopLiveStreamAction,
 } from './actionTypes';
 import { ActionOf, ActionCreator } from 'app/core/redux/actionCreatorFactory';
 import { LogsDedupStrategy } from 'app/core/logs_model';
@@ -553,11 +555,16 @@ export function runQueries(exploreId: ExploreId, ignoreUIState = false): ThunkRe
       supportsTable,
       datasourceError,
       containerWidth,
+      streaming,
     } = getState().explore[exploreId];
 
     if (datasourceError) {
       // let's not run any queries if data source is in a faulty state
       return Promise.resolve();
+    }
+
+    if (!datasourceInstance.supportsStreaming && streaming) {
+      dispatch(stopLiveStreamAction({ exploreId }));
     }
 
     if (!hasNonEmptyQuery(queries)) {
@@ -629,10 +636,19 @@ function runQueriesForType(
   resultGetter?: ResultGetter
 ): ThunkResult<void> {
   return async (dispatch, getState) => {
-    const { datasourceInstance, eventBridge, queries, queryIntervals, range, scanning } = getState().explore[exploreId];
+    const { datasourceInstance, eventBridge, queries, queryIntervals, range, scanning, streaming } = getState().explore[
+      exploreId
+    ];
     const datasourceId = datasourceInstance.meta.id;
-    if (datasourceInstance.stream) {
-      dispatch(getExploreDataAction({ exploreId, queryOptions, resultGetter, resultType }));
+    if (datasourceInstance.supportsStreaming) {
+      dispatch(
+        getExploreDataAction({
+          exploreId,
+          queryOptions,
+          resultGetter,
+          resultType,
+        })
+      );
       return;
     }
 
@@ -645,7 +661,8 @@ function runQueriesForType(
         queryOptions,
         range,
         queryIntervals,
-        scanning
+        scanning,
+        streaming
       );
       dispatch(
         queryTransactionStartAction({
@@ -874,3 +891,11 @@ export function refreshExplore(exploreId: ExploreId): ThunkResult<void> {
     }
   };
 }
+
+export const toggleLiveStream = (exploreId: ExploreId, streaming: boolean): ThunkResult<void> => {
+  return dispatch => {
+    const actionToDispatch = streaming ? startLiveStreamAction({ exploreId }) : stopLiveStreamAction({ exploreId });
+    dispatch(actionToDispatch);
+    dispatch(runQueries(exploreId));
+  };
+};
