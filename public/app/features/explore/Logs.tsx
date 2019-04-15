@@ -53,6 +53,7 @@ interface Props {
   scanRange?: RawTimeRange;
   dedupStrategy: LogsDedupStrategy;
   hiddenLogLevels: Set<LogLevel>;
+  streaming: boolean;
   onChangeTime?: (range: RawTimeRange) => void;
   onClickLabel?: (label: string, value: string) => void;
   onStartScanning?: () => void;
@@ -160,6 +161,7 @@ export default class Logs extends PureComponent<Props, State> {
       scanRange,
       width,
       dedupedData,
+      streaming,
     } = this.props;
 
     if (!data) {
@@ -194,48 +196,52 @@ export default class Logs extends PureComponent<Props, State> {
 
     return (
       <div className="logs-panel">
-        <div className="logs-panel-graph">
-          <Graph
-            data={timeSeries}
-            height={100}
-            width={width}
-            range={range}
-            id={`explore-logs-graph-${exploreId}`}
-            onChangeTime={this.props.onChangeTime}
-            onToggleSeries={this.onToggleLogLevel}
-            userOptions={graphOptions}
-          />
-        </div>
-        <div className="logs-panel-options">
-          <div className="logs-panel-controls">
-            <Switch label="Timestamp" checked={showUtc} onChange={this.onChangeUtc} transparent />
-            <Switch label="Local time" checked={showLocalTime} onChange={this.onChangeLocalTime} transparent />
-            <Switch label="Labels" checked={showLabels} onChange={this.onChangeLabels} transparent />
-            <ToggleButtonGroup label="Dedup" transparent={true}>
-              {Object.keys(LogsDedupStrategy).map((dedupType, i) => (
-                <ToggleButton
-                  key={i}
-                  value={dedupType}
-                  onChange={this.onChangeDedup}
-                  selected={dedupStrategy === dedupType}
-                  tooltip={LogsDedupDescription[dedupType]}
-                >
-                  {dedupType}
-                </ToggleButton>
-              ))}
-            </ToggleButtonGroup>
-          </div>
-        </div>
-
-        {hasData && meta && (
-          <div className="logs-panel-meta">
-            {meta.map(item => (
-              <div className="logs-panel-meta__item" key={item.label}>
-                <span className="logs-panel-meta__label">{item.label}:</span>
-                <span className="logs-panel-meta__value">{renderMetaItem(item.value, item.kind)}</span>
+        {!streaming && (
+          <>
+            <div className="logs-panel-graph">
+              <Graph
+                data={timeSeries}
+                height={100}
+                width={width}
+                range={range}
+                id={`explore-logs-graph-${exploreId}`}
+                onChangeTime={this.props.onChangeTime}
+                onToggleSeries={this.onToggleLogLevel}
+                userOptions={graphOptions}
+              />
+            </div>
+            <div className="logs-panel-options">
+              <div className="logs-panel-controls">
+                <Switch label="Timestamp" checked={showUtc} onChange={this.onChangeUtc} transparent />
+                <Switch label="Local time" checked={showLocalTime} onChange={this.onChangeLocalTime} transparent />
+                <Switch label="Labels" checked={showLabels} onChange={this.onChangeLabels} transparent />
+                <ToggleButtonGroup label="Dedup" transparent={true}>
+                  {Object.keys(LogsDedupStrategy).map((dedupType, i) => (
+                    <ToggleButton
+                      key={i}
+                      value={dedupType}
+                      onChange={this.onChangeDedup}
+                      selected={dedupStrategy === dedupType}
+                      tooltip={LogsDedupDescription[dedupType]}
+                    >
+                      {dedupType}
+                    </ToggleButton>
+                  ))}
+                </ToggleButtonGroup>
               </div>
-            ))}
-          </div>
+            </div>
+
+            {hasData && meta && (
+              <div className="logs-panel-meta">
+                {meta.map(item => (
+                  <div className="logs-panel-meta__item" key={item.label}>
+                    <span className="logs-panel-meta__label">{item.label}:</span>
+                    <span className="logs-panel-meta__value">{renderMetaItem(item.value, item.kind)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
 
         <div className="logs-rows">
@@ -271,7 +277,7 @@ export default class Logs extends PureComponent<Props, State> {
             ))}
           {hasData && deferLogs && <span>Rendering {dedupedData.rows.length} rows...</span>}
         </div>
-        {!loading && !hasData && !scanning && (
+        {!streaming && !loading && !hasData && !scanning && (
           <div className="logs-panel-nodata">
             No logs found.
             <a className="link" onClick={this.onClickScan}>
@@ -280,7 +286,7 @@ export default class Logs extends PureComponent<Props, State> {
           </div>
         )}
 
-        {scanning && (
+        {!streaming && scanning && (
           <div className="logs-panel-nodata">
             <span>{scanText}</span>
             <a className="link" onClick={this.onClickStopScan}>

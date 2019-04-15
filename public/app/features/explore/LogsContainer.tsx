@@ -33,6 +33,7 @@ interface LogsContainerProps {
   dedupStrategy: LogsDedupStrategy;
   hiddenLogLevels: Set<LogLevel>;
   width: number;
+  streaming: boolean;
 }
 
 export class LogsContainer extends PureComponent<LogsContainerProps> {
@@ -69,6 +70,7 @@ export class LogsContainer extends PureComponent<LogsContainerProps> {
       scanRange,
       width,
       hiddenLogLevels,
+      streaming,
     } = this.props;
 
     return (
@@ -92,6 +94,7 @@ export class LogsContainer extends PureComponent<LogsContainerProps> {
           scanRange={scanRange}
           width={width}
           hiddenLogLevels={hiddenLogLevels}
+          streaming={streaming}
         />
       </Panel>
     );
@@ -101,7 +104,7 @@ export class LogsContainer extends PureComponent<LogsContainerProps> {
 function mapStateToProps(state: StoreState, { exploreId }) {
   const explore = state.explore;
   const item: ExploreItemState = explore[exploreId];
-  const { logsHighlighterExpressions, logsResult, queryTransactions, scanning, scanRange, range } = item;
+  const { logsHighlighterExpressions, logsResult, queryTransactions, scanning, scanRange, range, streaming } = item;
   const loading = queryTransactions.some(qt => qt.resultType === 'Logs' && !qt.done);
   const { showingLogs, dedupStrategy } = exploreItemUIStateSelector(item);
   const hiddenLogLevels = new Set(item.hiddenLogLevels);
@@ -118,6 +121,7 @@ function mapStateToProps(state: StoreState, { exploreId }) {
     dedupStrategy,
     hiddenLogLevels,
     dedupedResult,
+    streaming,
   };
 }
 
