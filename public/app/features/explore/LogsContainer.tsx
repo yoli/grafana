@@ -1,10 +1,11 @@
 import React, { PureComponent } from 'react';
 import { hot } from 'react-hot-loader';
 import { connect } from 'react-redux';
+import moment, { Moment } from 'moment';
 import { RawTimeRange, TimeRange, LogLevel } from '@grafana/ui';
 
 import { ExploreId, ExploreItemState } from 'app/types/explore';
-import { LogsModel, LogsDedupStrategy } from 'app/core/logs_model';
+import { LogsModel, LogsDedupStrategy, LogRowModel } from 'app/core/logs_model';
 import { StoreState } from 'app/types';
 
 import { toggleLogs, changeDedupStrategy } from './state/actions';
@@ -34,6 +35,8 @@ interface LogsContainerProps {
   hiddenLogLevels: Set<LogLevel>;
   width: number;
   streaming: boolean;
+  streamingRows: LogRowModel[];
+  streamingLastUpdate: Moment;
 }
 
 export class LogsContainer extends PureComponent<LogsContainerProps> {
@@ -71,31 +74,61 @@ export class LogsContainer extends PureComponent<LogsContainerProps> {
       width,
       hiddenLogLevels,
       streaming,
+      streamingRows,
+      streamingLastUpdate,
     } = this.props;
+
+    const now = moment();
+    const lastUpdatedDate = moment.duration(now.diff(streamingLastUpdate));
+    const lastUpdated = streamingLastUpdate
+      ? `Data last updated ${lastUpdatedDate.asSeconds()}s`
+      : 'Waiting for data...';
 
     return (
       <Panel label="Logs" loading={loading} isOpen={showingLogs} onToggle={this.onClickLogsButton}>
-        <Logs
-          dedupStrategy={this.props.dedupStrategy || LogsDedupStrategy.none}
-          data={logsResult}
-          dedupedData={dedupedResult}
-          exploreId={exploreId}
-          key={logsResult && logsResult.id}
-          highlighterExpressions={logsHighlighterExpressions}
-          loading={loading}
-          onChangeTime={onChangeTime}
-          onClickLabel={onClickLabel}
-          onStartScanning={onStartScanning}
-          onStopScanning={onStopScanning}
-          onDedupStrategyChange={this.handleDedupStrategyChange}
-          onToggleLogLevel={this.hangleToggleLogLevel}
-          range={range}
-          scanning={scanning}
-          scanRange={scanRange}
-          width={width}
-          hiddenLogLevels={hiddenLogLevels}
-          streaming={streaming}
-        />
+        {streaming && (
+          <div>
+            <div className="logs-panel-meta">
+              <span>{lastUpdated}</span>
+            </div>
+            <div>
+              {streamingRows.map((row, index) => {
+                const isFreshRow = now.diff(moment(row.timeEpochMs), 'seconds') < 2;
+                const className = isFreshRow ? 'logs-row fresh' : 'logs-row old';
+                return (
+                  <div className={className} key={`${row.key}-${index}`}>
+                    <div className="logs-row__localtime" title={`${row.timestamp} (${row.timeFromNow})`}>
+                      {row.timeLocal}
+                    </div>
+                    <div className="logs-row__message">{row.entry}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {!streaming && (
+          <Logs
+            dedupStrategy={this.props.dedupStrategy || LogsDedupStrategy.none}
+            data={logsResult}
+            dedupedData={dedupedResult}
+            exploreId={exploreId}
+            key={logsResult && logsResult.id}
+            highlighterExpressions={logsHighlighterExpressions}
+            loading={loading}
+            onChangeTime={onChangeTime}
+            onClickLabel={onClickLabel}
+            onStartScanning={onStartScanning}
+            onStopScanning={onStopScanning}
+            onDedupStrategyChange={this.handleDedupStrategyChange}
+            onToggleLogLevel={this.hangleToggleLogLevel}
+            range={range}
+            scanning={scanning}
+            scanRange={scanRange}
+            width={width}
+            hiddenLogLevels={hiddenLogLevels}
+          />
+        )}
       </Panel>
     );
   }
@@ -104,8 +137,18 @@ export class LogsContainer extends PureComponent<LogsContainerProps> {
 function mapStateToProps(state: StoreState, { exploreId }) {
   const explore = state.explore;
   const item: ExploreItemState = explore[exploreId];
-  const { logsHighlighterExpressions, logsResult, queryTransactions, scanning, scanRange, range, streaming } = item;
-  const loading = queryTransactions.some(qt => qt.resultType === 'Logs' && !qt.done);
+  const {
+    logsHighlighterExpressions,
+    logsResult,
+    queryTransactions,
+    scanning,
+    scanRange,
+    range,
+    streaming,
+    streamingRows,
+    streamingLastUpdate,
+  } = item;
+  const loading = streaming ? true : queryTransactions.some(qt => qt.resultType === 'Logs' && !qt.done);
   const { showingLogs, dedupStrategy } = exploreItemUIStateSelector(item);
   const hiddenLogLevels = new Set(item.hiddenLogLevels);
   const dedupedResult = deduplicatedLogsSelector(item);
@@ -122,6 +165,8 @@ function mapStateToProps(state: StoreState, { exploreId }) {
     hiddenLogLevels,
     dedupedResult,
     streaming,
+    streamingRows,
+    streamingLastUpdate,
   };
 }
 

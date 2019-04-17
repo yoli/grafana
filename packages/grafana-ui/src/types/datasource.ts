@@ -98,6 +98,8 @@ export interface DataSourceApi<TQuery extends DataQuery = DataQuery> {
 
   supportsStreaming?: boolean;
 
+  mergeStreams?: Function;
+
   /**
    * Test & verify datasource settings & connection details
    */

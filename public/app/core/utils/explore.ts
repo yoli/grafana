@@ -41,6 +41,8 @@ const MAX_HISTORY_ITEMS = 100;
 
 export const LAST_USED_DATASOURCE_KEY = 'grafana.explore.datasource';
 
+export const EXPLORE_POLLING_INTERVAL_MS = 1500;
+
 /**
  * Returns an Explore-URL that contains a panel's queries and the dashboard time range.
  *

@@ -7,7 +7,12 @@ import { actionCreatorFactory, ActionOf } from 'app/core/redux';
 import { DataQuery, QueryHint } from '@grafana/ui/src/types/datasource';
 
 import { ExploreId, ResultType, QueryOptions, ExploreItemState, QueryTransaction } from 'app/types/explore';
-import { buildQueryTransaction, makeTimeSeriesList, updateHistory } from 'app/core/utils/explore';
+import {
+  buildQueryTransaction,
+  makeTimeSeriesList,
+  updateHistory,
+  EXPLORE_POLLING_INTERVAL_MS,
+} from 'app/core/utils/explore';
 import {
   queryTransactionStartAction,
   queryTransactionSuccessAction,
@@ -119,7 +124,7 @@ export const getQueryResultEpic: Epic<ActionOf<any>, ActionOf<any>, StoreState> 
         }),
       ]);
 
-      const intervalStream$ = interval(1000).pipe(tap(value => console.log(exploreId + ': ' + value)));
+      const intervalStream$ = interval(EXPLORE_POLLING_INTERVAL_MS);
 
       const getQueryStream = (transaction: QueryTransaction, queryTransactions: QueryTransaction[]) =>
         from(datasourceInstance.query({ ...transaction.options, streaming })).pipe(

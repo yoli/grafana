@@ -13,8 +13,9 @@ import {
 } from '@grafana/ui';
 
 import { Emitter, TimeSeries } from 'app/core/core';
-import { LogsModel, LogsDedupStrategy } from 'app/core/logs_model';
+import { LogsModel, LogsDedupStrategy, LogRowModel } from 'app/core/logs_model';
 import TableModel from 'app/core/table_model';
+import { Moment } from 'moment';
 
 export interface CompletionItem {
   /**
@@ -260,6 +261,10 @@ export interface ExploreItemState {
   update: ExploreUpdateState;
 
   streaming: boolean;
+
+  streamingRows: LogRowModel[];
+
+  streamingLastUpdate: Moment;
 }
 
 export interface ExploreUpdateState {

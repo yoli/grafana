@@ -1,4 +1,6 @@
 import _ from 'lodash';
+import moment from 'moment';
+
 import {
   calculateResultsFromQueryTransactions,
   generateEmptyQuery,
@@ -55,7 +57,6 @@ import {
 } from './actionTypes';
 import { updateLocation } from 'app/core/actions/location';
 import { LocationUpdate } from 'app/types';
-import { LogsModel } from 'app/core/logs_model';
 
 export const DEFAULT_RANGE = {
   from: 'now-6h',
@@ -102,6 +103,8 @@ export const makeExploreItemState = (): ExploreItemState => ({
   urlState: null,
   update: makeInitialUpdateState(),
   streaming: false,
+  streamingRows: [],
+  streamingLastUpdate: null,
 });
 
 /**
@@ -375,27 +378,11 @@ export const itemReducer = reducerFactory<ExploreItemState>({} as ExploreItemSta
         datasourceInstance,
         queryIntervals.intervalMs
       );
-
-      if (streaming) {
-        // just so that we can see the log rows change, needs lots more logic
-        const rows = logsResult.rows.concat(state.logsResult.rows);
-        const accumulatedLogsResult: LogsModel = state.logsResult
-          ? {
-              ...state.logsResult,
-              rows: rows.slice(0, 1000),
-            }
-          : logsResult;
-        return {
-          ...state,
-          graphResult,
-          tableResult,
-          logsResult: accumulatedLogsResult,
-          history,
-          queryTransactions,
-          showingStartPage: false,
-          update: makeInitialUpdateState(),
-        };
-      }
+      const hasStreamingLogResult = streaming && logsResult && logsResult.rows.length > 0;
+      const streamingLastUpdate = hasStreamingLogResult ? moment() : state.streamingLastUpdate;
+      const streamingRows = hasStreamingLogResult
+        ? [].concat(logsResult.rows, state.streamingRows).slice(0, 1000)
+        : state.streamingRows;
 
       return {
         ...state,
@@ -406,6 +393,8 @@ export const itemReducer = reducerFactory<ExploreItemState>({} as ExploreItemSta
         queryTransactions,
         showingStartPage: false,
         update: makeInitialUpdateState(),
+        streamingLastUpdate,
+        streamingRows,
       };
     },
   })
@@ -610,6 +599,7 @@ export const itemReducer = reducerFactory<ExploreItemState>({} as ExploreItemSta
       return {
         ...state,
         streaming: true,
+        streamingRows: state.logsResult ? state.logsResult.rows.slice(0, 1000) : [],
       };
     },
   })
@@ -619,6 +609,8 @@ export const itemReducer = reducerFactory<ExploreItemState>({} as ExploreItemSta
       return {
         ...state,
         streaming: false,
+        streamingRows: [],
+        streamingLastUpdate: null,
       };
     },
   })

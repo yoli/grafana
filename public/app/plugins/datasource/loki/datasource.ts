@@ -14,6 +14,7 @@ import { makeSeriesForLogs } from 'app/core/logs_model';
 import { LogsStream, LogsModel } from 'app/core/logs_model';
 import { PluginMeta, DataQueryOptions } from '@grafana/ui/src/types';
 import { LokiQuery } from './types';
+import { EXPLORE_POLLING_INTERVAL_MS } from 'app/core/utils/explore';
 
 export const DEFAULT_MAX_LINES = 1000;
 
@@ -67,8 +68,8 @@ export class LokiDatasource {
     const streaming = options.streaming;
     const interpolated = this.templateSrv.replace(target.expr);
     const now = moment();
-    const liveStreamStart = now.clone().subtract(1, 'seconds');
-    const liveStreamEnd = now;
+    const liveStreamStart = now.clone().subtract(EXPLORE_POLLING_INTERVAL_MS, 'milliseconds');
+    const liveStreamEnd = now.clone();
     const start = streaming ? this.getTime(liveStreamStart, false) : this.getTime(options.range.from, false);
     const end = streaming ? this.getTime(liveStreamEnd, true) : this.getTime(options.range.to, true);
     return {
