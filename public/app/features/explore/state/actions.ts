@@ -555,16 +555,11 @@ export function runQueries(exploreId: ExploreId, ignoreUIState = false): ThunkRe
       supportsTable,
       datasourceError,
       containerWidth,
-      streaming,
     } = getState().explore[exploreId];
 
     if (datasourceError) {
       // let's not run any queries if data source is in a faulty state
       return Promise.resolve();
-    }
-
-    if (!datasourceInstance.supportsStreaming && streaming) {
-      dispatch(stopLiveStreamAction({ exploreId }));
     }
 
     if (!hasNonEmptyQuery(queries)) {
@@ -640,6 +635,7 @@ function runQueriesForType(
       exploreId
     ];
     const datasourceId = datasourceInstance.meta.id;
+
     if (datasourceInstance.supportsStreaming) {
       dispatch(
         getExploreDataAction({
@@ -649,7 +645,7 @@ function runQueriesForType(
           resultType,
         })
       );
-      return;
+      return Promise.resolve();
     }
 
     // Run all queries concurrently
@@ -664,14 +660,7 @@ function runQueriesForType(
         scanning,
         streaming
       );
-      dispatch(
-        queryTransactionStartAction({
-          exploreId,
-          resultType,
-          rowIndex,
-          transaction,
-        })
-      );
+      dispatch(queryTransactionStartAction({ exploreId, resultType, rowIndex, transaction }));
       try {
         const now = Date.now();
         const res = await datasourceInstance.query(transaction.options);
