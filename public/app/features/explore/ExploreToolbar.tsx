@@ -3,7 +3,7 @@ import { connect } from 'react-redux';
 import { hot } from 'react-hot-loader';
 
 import { ExploreId } from 'app/types/explore';
-import { DataSourceSelectItem, RawTimeRange, TimeRange, ClickOutsideWrapper, Switch } from '@grafana/ui';
+import { DataSourceSelectItem, RawTimeRange, TimeRange, ClickOutsideWrapper, SelectOptionItem } from '@grafana/ui';
 import { DataSourcePicker } from 'app/core/components/Select/DataSourcePicker';
 import { StoreState } from 'app/types/store';
 import {
@@ -17,6 +17,7 @@ import {
 } from './state/actions';
 import TimePicker from './TimePicker';
 import { RefreshPicker, SetInterval } from '@grafana/ui';
+import { ExploreActionButton } from './ExploreActionButton';
 
 enum IconSide {
   left = 'left',
@@ -46,10 +47,19 @@ const createResponsiveButton = (options: {
   );
 };
 
+enum ActionButtonType {
+  RunQuery = 'RunQuery',
+  LiveStream = 'LiveStream',
+}
+
 interface OwnProps {
   exploreId: ExploreId;
   timepickerRef: React.RefObject<TimePicker>;
   onChangeTime: (range: TimeRange, changedByScanner?: boolean) => void;
+}
+
+interface OwnState {
+  buttonValue: ActionButtonType;
 }
 
 interface StateProps {
@@ -62,6 +72,7 @@ interface StateProps {
   refreshInterval: string;
   streaming: boolean;
   supportsStreaming: boolean;
+  buttonOptions: SelectOptionItem[];
 }
 
 interface DispatchProps {
@@ -76,10 +87,10 @@ interface DispatchProps {
 
 type Props = StateProps & DispatchProps & OwnProps;
 
-export class UnConnectedExploreToolbar extends PureComponent<Props, {}> {
-  constructor(props: Props) {
-    super(props);
-  }
+export class UnConnectedExploreToolbar extends PureComponent<Props, OwnState> {
+  state: OwnState = {
+    buttonValue: this.props.streaming ? ActionButtonType.LiveStream : ActionButtonType.RunQuery,
+  };
 
   onChangeDatasource = async option => {
     this.props.changeDatasource(this.props.exploreId, option.value);
@@ -107,6 +118,30 @@ export class UnConnectedExploreToolbar extends PureComponent<Props, {}> {
     this.props.toggleLiveStream(exploreId, event.target.checked);
   };
 
+  onActionButtonTypeChange = (item: SelectOptionItem) => {
+    const { exploreId, toggleLiveStream } = this.props;
+    if (item.value === ActionButtonType.LiveStream) {
+      toggleLiveStream(exploreId, true);
+    }
+
+    if (item.value === ActionButtonType.RunQuery) {
+      toggleLiveStream(exploreId, false);
+    }
+    this.setState({ buttonValue: item.value });
+  };
+
+  onActionButtonClick = () => {
+    const { exploreId, runQueries } = this.props;
+    const { buttonValue } = this.state;
+    if (buttonValue === ActionButtonType.LiveStream) {
+      // Do nothing for now, maybe add 'Pause live streaming' here
+    }
+
+    if (buttonValue === ActionButtonType.RunQuery) {
+      runQueries(exploreId);
+    }
+  };
+
   render() {
     const {
       datasourceMissing,
@@ -123,7 +158,9 @@ export class UnConnectedExploreToolbar extends PureComponent<Props, {}> {
       split,
       streaming,
       supportsStreaming,
+      buttonOptions,
     } = this.props;
+    const { buttonValue } = this.state;
 
     return (
       <div className={splitted ? 'explore-toolbar splitted' : 'explore-toolbar'}>
@@ -168,11 +205,6 @@ export class UnConnectedExploreToolbar extends PureComponent<Props, {}> {
                 })}
               </div>
             ) : null}
-            {supportsStreaming && (
-              <div className="explore-toolbar-content-item">
-                <Switch checked={streaming} onChange={this.onLiveStreamChange} label="Live" />
-              </div>
-            )}
             {!streaming && (
               <>
                 <div className="explore-toolbar-content-item timepicker">
@@ -194,17 +226,29 @@ export class UnConnectedExploreToolbar extends PureComponent<Props, {}> {
                     Clear All
                   </button>
                 </div>
-                <div className="explore-toolbar-content-item">
-                  {createResponsiveButton({
-                    splitted,
-                    title: 'Run Query',
-                    onClick: this.onRunQuery,
-                    buttonClassName: 'navbar-button--secondary',
-                    iconClassName: loading ? 'fa fa-spinner fa-fw fa-spin run-icon' : 'fa fa-level-down fa-fw run-icon',
-                    iconSide: IconSide.right,
-                  })}
-                </div>
               </>
+            )}
+            {!supportsStreaming && (
+              <div className="explore-toolbar-content-item">
+                {createResponsiveButton({
+                  splitted,
+                  title: 'Run Query',
+                  onClick: this.onRunQuery,
+                  buttonClassName: 'navbar-button--secondary',
+                  iconClassName: loading ? 'fa fa-spinner fa-fw fa-spin run-icon' : 'fa fa-level-down fa-fw run-icon',
+                  iconSide: IconSide.right,
+                })}
+              </div>
+            )}
+            {supportsStreaming && (
+              <ExploreActionButton
+                buttonOptions={buttonOptions}
+                buttonValue={buttonValue}
+                loading={loading}
+                streaming={streaming}
+                onActionButtonTypeChange={this.onActionButtonTypeChange}
+                onActionButtonClick={this.onActionButtonClick}
+              />
             )}
           </div>
         </div>
@@ -228,7 +272,12 @@ const mapStateToProps = (state: StoreState, { exploreId }: OwnProps): StateProps
   const selectedDatasource = datasourceInstance
     ? exploreDatasources.find(datasource => datasource.name === datasourceInstance.name)
     : undefined;
-  const loading = queryTransactions.some(qt => !qt.done);
+  const loading = streaming ? true : queryTransactions.some(qt => !qt.done);
+  const supportsStreaming = datasourceInstance ? datasourceInstance.supportsStreaming : false;
+  const buttonOptions: SelectOptionItem[] = [
+    { value: ActionButtonType.RunQuery, label: 'Run Query' },
+    { value: ActionButtonType.LiveStream, label: 'Live Streaming' },
+  ];
 
   return {
     datasourceMissing,
@@ -239,7 +288,8 @@ const mapStateToProps = (state: StoreState, { exploreId }: OwnProps): StateProps
     splitted,
     refreshInterval,
     streaming,
-    supportsStreaming: datasourceInstance ? datasourceInstance.supportsStreaming : false,
+    supportsStreaming,
+    buttonOptions,
   };
 };
 

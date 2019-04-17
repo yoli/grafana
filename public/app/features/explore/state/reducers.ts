@@ -675,7 +675,11 @@ export const exploreReducer = (state = initialExploreState, action: HigherOrderA
     }
 
     case ActionTypes.SplitOpen: {
-      return { ...state, split: true, right: { ...action.payload.itemState } };
+      return {
+        ...state,
+        split: true,
+        right: { ...action.payload.itemState },
+      };
     }
 
     case ActionTypes.ResetExplore: {
