@@ -19,7 +19,6 @@ export const DEFAULT_MAX_LINES = 1000;
 const DEFAULT_QUERY_PARAMS = {
   direction: 'BACKWARD',
   limit: DEFAULT_MAX_LINES,
-  regexp: '',
   query: '',
 };
 
@@ -62,11 +61,12 @@ export class LokiDatasource {
 
   prepareQueryTarget(target, options) {
     const interpolated = this.templateSrv.replace(target.expr);
+    const { query } = parseQuery(interpolated);
     const start = this.getTime(options.range.from, false);
     const end = this.getTime(options.range.to, true);
     return {
       ...DEFAULT_QUERY_PARAMS,
-      ...parseQuery(interpolated),
+      query,
       start,
       end,
       limit: this.maxLines,
@@ -89,12 +89,8 @@ export class LokiDatasource {
 
       for (let i = 0; i < results.length; i++) {
         const result = results[i];
-        const query = queryTargets[i];
-
-        // add search term to stream & add to array
         if (result.data) {
           for (const stream of result.data.streams || []) {
-            stream.search = query.regexp;
             allStreams.push(stream);
           }
         }
@@ -126,7 +122,7 @@ export class LokiDatasource {
 
   modifyQuery(query: LokiQuery, action: any): LokiQuery {
     const parsed = parseQuery(query.expr || '');
-    let selector = parsed.query;
+    let { selector } = parsed;
     switch (action.type) {
       case 'ADD_FILTER': {
         selector = addLabelToSelector(selector, action.key, action.value);
@@ -135,12 +131,12 @@ export class LokiDatasource {
       default:
         break;
     }
-    const expression = formatQuery(selector, parsed.regexp);
+    const expression = formatQuery(selector, parsed.filter);
     return { ...query, expr: expression };
   }
 
   getHighlighterExpression(query: LokiQuery): string {
-    return parseQuery(query.expr).regexp;
+    return undefined;
   }
 
   getTime(date, roundUp) {
