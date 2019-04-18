@@ -1,6 +1,9 @@
 // Libraries
 import _ from 'lodash';
 import moment from 'moment';
+import { from, Observable, combineLatest } from 'rxjs';
+import { webSocket } from 'rxjs/webSocket';
+import { map, mergeMap } from 'rxjs/operators';
 
 // Services & Utils
 import * as dateMath from 'app/core/utils/datemath';
@@ -12,11 +15,21 @@ import { makeSeriesForLogs } from 'app/core/logs_model';
 
 // Types
 import { LogsStream, LogsModel } from 'app/core/logs_model';
-import { PluginMeta, DataQueryOptions } from '@grafana/ui/src/types';
+import { PluginMeta, DataQueryOptions, DataQueryResponse } from '@grafana/ui/src/types';
 import { LokiQuery } from './types';
 import { EXPLORE_POLLING_INTERVAL_MS } from 'app/core/utils/explore';
 
 export const DEFAULT_MAX_LINES = 1000;
+
+interface LokiStreamResult {
+  labels: { [key: string]: string };
+  entries: [
+    {
+      ts: string;
+      line: string;
+    }
+  ];
+}
 
 const DEFAULT_QUERY_PARAMS = {
   direction: 'BACKWARD',
@@ -58,6 +71,18 @@ export class LokiDatasource {
     return this.backendSrv.datasourceRequest(req);
   }
 
+  _stream(apiUrl: string, data?: any, options?: any): Observable<LokiStreamResult> {
+    return from(this.backendSrv.get(`api/datasources/${this.instanceSettings.id}`)).pipe(
+      map((result: any) => {
+        const baseUrl = new URL('', result.url);
+        const params = data ? `${serializeParams(data)}` : '';
+        const url = `ws://${result.basicAuthUser}:${result.basicAuthPassword}@${baseUrl.host}${apiUrl}?${params}`;
+        return webSocket<LokiStreamResult>(url);
+      }),
+      mergeMap(stream => stream)
+    );
+  }
+
   mergeStreams(streams: LogsStream[], intervalMs: number): LogsModel {
     const logs = mergeStreamsToLogs(streams, this.maxLines);
     logs.series = makeSeriesForLogs(logs.rows, intervalMs);
@@ -79,6 +104,32 @@ export class LokiDatasource {
       end,
       limit: this.maxLines,
     };
+  }
+
+  prepareStreamQueryTarget(target: LokiQuery, options: DataQueryOptions<LokiQuery>) {
+    const interpolated = this.templateSrv.replace(target.expr);
+    return {
+      ...parseQuery(interpolated),
+    };
+  }
+
+  stream(options: DataQueryOptions<LokiQuery>): Observable<DataQueryResponse> {
+    const queryTargets = options.targets
+      .filter(target => target.expr && !target.hide)
+      .map(target => this.prepareStreamQueryTarget(target, options));
+
+    if (queryTargets.length === 0) {
+      return from([]);
+    }
+
+    const queryStreams$ = queryTargets.map(target => this._stream('/api/prom/tail', target));
+    return combineLatest(...queryStreams$).pipe(
+      mergeMap(result => result),
+      map(result => {
+        const allStreams: LogsStream[] = [result];
+        return { data: allStreams };
+      })
+    );
   }
 
   async query(options: DataQueryOptions<LokiQuery>) {

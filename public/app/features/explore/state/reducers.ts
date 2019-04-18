@@ -103,7 +103,8 @@ export const makeExploreItemState = (): ExploreItemState => ({
   urlState: null,
   update: makeInitialUpdateState(),
   streaming: false,
-  streamingRows: [],
+  streamingFreshRows: [],
+  streamingOldRows: [],
   streamingLastUpdate: null,
 });
 
@@ -380,9 +381,10 @@ export const itemReducer = reducerFactory<ExploreItemState>({} as ExploreItemSta
       );
       const hasStreamingLogResult = streaming && logsResult && logsResult.rows.length > 0;
       const streamingLastUpdate = hasStreamingLogResult ? moment() : state.streamingLastUpdate;
-      const streamingRows = hasStreamingLogResult
-        ? [].concat(logsResult.rows, state.streamingRows).slice(0, 1000)
-        : state.streamingRows;
+      const streamingOldRows = hasStreamingLogResult
+        ? [].concat(state.streamingFreshRows, state.streamingOldRows).slice(0, 1000)
+        : state.streamingOldRows;
+      const streamingFreshRows = hasStreamingLogResult ? logsResult.rows : state.streamingFreshRows;
 
       return {
         ...state,
@@ -394,7 +396,8 @@ export const itemReducer = reducerFactory<ExploreItemState>({} as ExploreItemSta
         showingStartPage: false,
         update: makeInitialUpdateState(),
         streamingLastUpdate,
-        streamingRows,
+        streamingOldRows,
+        streamingFreshRows,
       };
     },
   })
@@ -599,7 +602,8 @@ export const itemReducer = reducerFactory<ExploreItemState>({} as ExploreItemSta
       return {
         ...state,
         streaming: true,
-        streamingRows: state.logsResult ? state.logsResult.rows.slice(0, 1000) : [],
+        streamingOldRows: state.logsResult ? state.logsResult.rows.slice(0, 1000) : [],
+        streamingFreshRows: [],
       };
     },
   })
@@ -609,7 +613,8 @@ export const itemReducer = reducerFactory<ExploreItemState>({} as ExploreItemSta
       return {
         ...state,
         streaming: false,
-        streamingRows: [],
+        streamingOldRows: [],
+        streamingFreshRows: [],
         streamingLastUpdate: null,
       };
     },

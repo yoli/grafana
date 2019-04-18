@@ -1,24 +1,20 @@
 // @ts-ignore
 import _ from 'lodash';
-import { map, tap, mergeMap, filter, catchError, single, takeWhile } from 'rxjs/operators';
-import { from, merge, interval } from 'rxjs';
+import { from, merge, pipe } from 'rxjs';
+import { single, takeUntil, filter, map, mergeMap, tap, catchError } from 'rxjs/operators';
 import { Epic, ofType } from 'redux-observable';
 import { actionCreatorFactory, ActionOf } from 'app/core/redux';
-import { DataQuery, QueryHint } from '@grafana/ui/src/types/datasource';
+import { DataQuery, QueryHint, DataQueryResponse } from '@grafana/ui/src/types/datasource';
 
 import { ExploreId, ResultType, QueryOptions, ExploreItemState, QueryTransaction } from 'app/types/explore';
-import {
-  buildQueryTransaction,
-  makeTimeSeriesList,
-  updateHistory,
-  EXPLORE_POLLING_INTERVAL_MS,
-} from 'app/core/utils/explore';
+import { buildQueryTransaction, makeTimeSeriesList, updateHistory } from 'app/core/utils/explore';
 import {
   queryTransactionStartAction,
   queryTransactionSuccessAction,
   scanRangeAction,
   scanStopAction,
   queryTransactionFailureAction,
+  stopLiveStreamAction,
 } from './actionTypes';
 import { StoreState } from 'app/types';
 
@@ -64,6 +60,43 @@ export const processFailedTransactionAction = actionCreatorFactory<ProcessFailed
   'explore/processFailedTransactionAction'
 ).create();
 
+const processLogstream = (
+  action: ActionOf<GetQueryResultPayload>,
+  state: ExploreItemState,
+  now: number,
+  resultGetter: Function
+) => {
+  const { exploreId, transaction } = action.payload;
+  const { queryTransactions, queries, datasourceInstance, eventBridge } = state;
+  const datasourceId = datasourceInstance.meta.id;
+  return pipe(
+    map((result: DataQueryResponse) => result.data || []),
+    tap((data: any) => eventBridge.emit('data-received', data)),
+    map(data => (resultGetter ? resultGetter(data, transaction, queryTransactions) : data)),
+    map(result =>
+      processSuccessfulTransactionAction({
+        exploreId,
+        transactionId: transaction.id,
+        result,
+        latency: Date.now() - now,
+        queries,
+        datasourceId,
+      })
+    ),
+    catchError(response => {
+      eventBridge.emit('data-error', response);
+      return [
+        processFailedTransactionAction({
+          exploreId,
+          transactionId: transaction.id,
+          response,
+          datasourceId,
+        }),
+      ];
+    })
+  );
+};
+
 export const getExploreDataEpic: Epic<ActionOf<any>, ActionOf<any>, StoreState> = (action$, state$) =>
   action$.pipe(
     ofType(getExploreDataAction.type),
@@ -103,14 +136,8 @@ export const getQueryResultEpic: Epic<ActionOf<any>, ActionOf<any>, StoreState> 
     ofType(getQueryResultAction.type),
     map(action => {
       const { exploreId, resultType, transaction, rowIndex } = action.payload;
-      const {
-        datasourceInstance,
-        eventBridge,
-        queryTransactions,
-        queries,
-        streaming,
-      }: Partial<ExploreItemState> = state$.value.explore[exploreId];
-      const datasourceId = datasourceInstance.meta.id;
+      const state = state$.value.explore[exploreId];
+      const { datasourceInstance, streaming }: Partial<ExploreItemState> = state;
       const now = Date.now();
       const resultGetter =
         resultType === 'Graph' ? makeTimeSeriesList : resultType === 'Table' ? (data: any) => data[0] : null;
@@ -124,51 +151,40 @@ export const getQueryResultEpic: Epic<ActionOf<any>, ActionOf<any>, StoreState> 
         }),
       ]);
 
-      const intervalStream$ = interval(EXPLORE_POLLING_INTERVAL_MS);
-
-      const getQueryStream = (transaction: QueryTransaction, queryTransactions: QueryTransaction[]) =>
+      const getQueryStream = (
+        action: ActionOf<GetQueryResultPayload>,
+        state: ExploreItemState,
+        now: number,
+        resultGetter: Function
+      ) =>
         from(datasourceInstance.query({ ...transaction.options, streaming })).pipe(
-          map(result => result.data || []),
-          tap((data: any) => eventBridge.emit('data-received', data)),
-          map(data => (resultGetter ? resultGetter(data, transaction, queryTransactions) : data)),
-          map(result =>
-            processSuccessfulTransactionAction({
-              exploreId,
-              transactionId: transaction.id,
-              result,
-              latency: Date.now() - now,
-              queries,
-              datasourceId,
-            })
-          ),
-          single(),
-          catchError(response => {
-            eventBridge.emit('data-error', response);
-            return [
-              processFailedTransactionAction({
-                exploreId,
-                transactionId: transaction.id,
-                response,
-                datasourceId,
-              }),
-            ];
-          })
+          processLogstream(action, state, now, resultGetter),
+          single()
         );
 
-      const liveStream$ = intervalStream$.pipe(
-        map(() => getQueryStream(transaction, queryTransactions)),
-        mergeMap(stream => stream),
-        takeWhile(action => {
-          const queryTransactions: QueryTransaction[] = state$.value.explore[exploreId].queryTransactions;
-          const transaction = queryTransactions.filter(qt => qt.id === action.payload.transactionId)[0];
-          return streaming && transaction && transaction.streaming;
-        })
-      );
+      const getLiveStream = (
+        action: ActionOf<GetQueryResultPayload>,
+        state: ExploreItemState,
+        now: number,
+        resultGetter: Function
+      ) =>
+        from(datasourceInstance.stream({ ...transaction.options, streaming })).pipe(
+          takeUntil(
+            action$.pipe(
+              filter(
+                takeUntilAction =>
+                  takeUntilAction.type === stopLiveStreamAction.type &&
+                  takeUntilAction.payload.exploreId === action.payload.exploreId
+              )
+            )
+          ),
+          processLogstream(action, state, now, resultGetter)
+        );
 
       const resultStream$ =
         streaming && transaction.streaming
-          ? merge(startStream$, liveStream$)
-          : merge(startStream$, getQueryStream(transaction, queryTransactions));
+          ? merge(startStream$, getLiveStream(action, state, now, resultGetter))
+          : merge(startStream$, getQueryStream(action, state, now, resultGetter));
 
       return resultStream$;
     }),

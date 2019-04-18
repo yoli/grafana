@@ -262,7 +262,9 @@ export interface ExploreItemState {
 
   streaming: boolean;
 
-  streamingRows: LogRowModel[];
+  streamingFreshRows: LogRowModel[];
+
+  streamingOldRows: LogRowModel[];
 
   streamingLastUpdate: Moment;
 }

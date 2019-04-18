@@ -35,7 +35,8 @@ interface LogsContainerProps {
   hiddenLogLevels: Set<LogLevel>;
   width: number;
   streaming: boolean;
-  streamingRows: LogRowModel[];
+  streamingOldRows: LogRowModel[];
+  streamingFreshRows: LogRowModel[];
   streamingLastUpdate: Moment;
 }
 
@@ -74,7 +75,8 @@ export class LogsContainer extends PureComponent<LogsContainerProps> {
       width,
       hiddenLogLevels,
       streaming,
-      streamingRows,
+      streamingOldRows,
+      streamingFreshRows,
       streamingLastUpdate,
     } = this.props;
 
@@ -92,11 +94,19 @@ export class LogsContainer extends PureComponent<LogsContainerProps> {
               <span>{lastUpdated}</span>
             </div>
             <div>
-              {streamingRows.map((row, index) => {
-                const isFreshRow = now.diff(moment(row.timeEpochMs), 'seconds') < 2;
-                const className = isFreshRow ? 'logs-row fresh' : 'logs-row old';
+              {streamingFreshRows.map((row, index) => {
                 return (
-                  <div className={className} key={`${row.key}-${index}`}>
+                  <div className="logs-row fresh" key={`${row.key}-${index}`}>
+                    <div className="logs-row__localtime" title={`${row.timestamp} (${row.timeFromNow})`}>
+                      {row.timeLocal}
+                    </div>
+                    <div className="logs-row__message">{row.entry}</div>
+                  </div>
+                );
+              })}
+              {streamingOldRows.map((row, index) => {
+                return (
+                  <div className="logs-row old" key={`${row.key}-${index}`}>
                     <div className="logs-row__localtime" title={`${row.timestamp} (${row.timeFromNow})`}>
                       {row.timeLocal}
                     </div>
@@ -145,7 +155,8 @@ function mapStateToProps(state: StoreState, { exploreId }) {
     scanRange,
     range,
     streaming,
-    streamingRows,
+    streamingFreshRows,
+    streamingOldRows,
     streamingLastUpdate,
   } = item;
   const loading = streaming ? true : queryTransactions.some(qt => qt.resultType === 'Logs' && !qt.done);
@@ -165,7 +176,8 @@ function mapStateToProps(state: StoreState, { exploreId }) {
     hiddenLogLevels,
     dedupedResult,
     streaming,
-    streamingRows,
+    streamingFreshRows,
+    streamingOldRows,
     streamingLastUpdate,
   };
 }

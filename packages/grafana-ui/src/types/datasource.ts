@@ -2,6 +2,7 @@ import { ComponentClass } from 'react';
 import { TimeRange, RawTimeRange } from './time';
 import { PluginMeta } from './plugin';
 import { TableData, TimeSeries, SeriesData } from './data';
+import { Observable } from 'rxjs';
 
 export class DataSourcePlugin<TQuery extends DataQuery = DataQuery> {
   DataSourceClass: DataSourceConstructor<TQuery>;
@@ -99,6 +100,8 @@ export interface DataSourceApi<TQuery extends DataQuery = DataQuery> {
   supportsStreaming?: boolean;
 
   mergeStreams?: Function;
+
+  stream?(options: DataQueryOptions<TQuery>): Observable<DataQueryResponse>;
 
   /**
    * Test & verify datasource settings & connection details
